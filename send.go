@@ -16,13 +16,14 @@ func sender(url string) {
 	ch, err := conn.Channel()
 	FailOnError(err, "Failed to open a channel")
 	defer ch.Close()
-	q, err := ch.QueueDeclare(
-		"test", // name
-		false,  // durable
-		false,  // delete when unused
-		false,  // exclusive
-		false,  // no-wait
-		nil,    // arguments
+	err = ch.ExchangeDeclare(
+		"test",   // name
+		"fanout", // type
+		false,    // durable
+		false,    // delete when unused
+		false,    // exclusive
+		false,    // no-wait
+		nil,      // arguments
 	)
 	failOnError(err, "Failed to declare a queue")
 
@@ -35,8 +36,14 @@ func sender(url string) {
 			reader := bufio.NewReader(os.Stdin)
 			fmt.Print("Messge: ")
 			msg, _ := reader.ReadString('\n')
-			if msg != "exit()" {
-				input <- msg
+			if msg != "exit()\n" {
+				if msg == "burst\n" {
+					for i := 1; i < 1000000; i++ {
+						input <- fmt.Sprintf("message: %d", i)
+					}
+				} else {
+					input <- msg
+				}
 			}
 		}
 	}()
@@ -45,8 +52,8 @@ func sender(url string) {
 
 	for body := range input {
 		err = ch.Publish(
-			"",     // exchange
-			q.Name, // routing key
+			"test", // exchange
+			"",     // routing key
 			false,  // mandatory
 			false,  // immediate
 			amqp.Publishing{
